@@ -66,13 +66,23 @@ static void hidboot_command (hidboot_adapter_t *a, unsigned char cmd,
         memcpy (buf+1, data, nbytes);
 
     if (debug_level > 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Send");
+#endif
         for (k=0; k<=nbytes; ++k) {
             if (k != 0 && (k & 15) == 0)
+            {
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+            }
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", buf[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     hid_write (a->hiddev, buf, 64);
 
@@ -84,21 +94,35 @@ static void hidboot_command (hidboot_adapter_t *a, unsigned char cmd,
     memset (a->reply, 0, sizeof(a->reply));
     a->reply_len = hid_read_timeout (a->hiddev, a->reply, 64, 4000);
     if (a->reply_len == 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Timed out.\n");
+#endif
         exit (-1);
     }
     if (a->reply_len != 64) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "hidboot: error %d receiving packet\n", a->reply_len);
+#endif
         exit (-1);
     }
     if (debug_level > 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Recv");
+#endif
         for (k=0; k<a->reply_len; ++k) {
             if (k != 0 && (k & 15) == 0)
+            {
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+            }
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", a->reply[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
 }
 
@@ -137,7 +161,11 @@ static void hidboot_program_word (adapter_t *adapter,
 {
     /* TODO */
     if (debug_level > 0)
+    {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "hidboot: program word at %08x: %08x\n", addr, word);
+#endif
+    }
 }
 
 /*
@@ -175,14 +203,18 @@ static void program_flash (hidboot_adapter_t *a,
     unsigned char request[64];
     unsigned nbytes;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "hidboot: program %d bytes at %08x: %08x-%08x-...-%08x\n",
+#endif
     //    nbytes, addr, data[0], data[1], data[nwords-1]);
 
     nbytes = nwords * 4;
     if (addr < a->adapter.user_start ||
         addr + nbytes >= a->adapter.user_start + a->adapter.user_nbytes)
     {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "address %08x out of program area\n", addr);
+#endif
         return;
     }
 
@@ -223,7 +255,9 @@ static void hidboot_erase_chip (adapter_t *adapter)
 {
     hidboot_adapter_t *a = (hidboot_adapter_t*) adapter;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "hidboot: erase chip\n");
+#endif
     hidboot_command (a, CMD_ERASE_DEVICE, 0, 0);
 
     /* To wait when erase finished, query a reply. */
@@ -246,12 +280,16 @@ adapter_t *adapter_open_hidboot (void)
     if (! hiddev)
         hiddev = hid_open (OLIMEX_VID, DUINOMITE_PID, 0);
     if (! hiddev) {
+#if DO_DEBUG_PRINTS
         /*fprintf (stderr, "HID bootloader not found\n");*/
+#endif
         return 0;
     }
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Out of memory\n");
+#endif
         return 0;
     }
     a->hiddev = hiddev;

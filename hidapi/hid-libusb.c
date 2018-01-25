@@ -54,7 +54,9 @@ extern "C" {
 #endif
 
 #ifdef DEBUG_PRINTF
+#if DO_DEBUG_PRINTS
 #define LOG(...) fprintf(stderr, __VA_ARGS__)
+#endif
 #else
 #define LOG(...) do {} while (0)
 #endif

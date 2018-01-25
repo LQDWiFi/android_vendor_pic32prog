@@ -76,7 +76,9 @@ static int receive (stk_adapter_t *a, unsigned char *data, int len)
     DWORD got;
 
     if (! ReadFile (a->fd, data, len, &got, 0)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "stk-send: read error\n");
+#endif
         exit (-1);
     }
 #else
@@ -98,7 +100,9 @@ again:
                 printf ("stk-send: programmer is not responding\n");
             goto again;
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "stk-send: select error: %s\n", strerror (errno));
+#endif
         exit (1);
     }
 #endif
@@ -111,7 +115,9 @@ again:
 #if ! defined(__WIN32__) && !defined(WIN32)
     got = read (a->fd, data, (len > 1024) ? 1024 : len);
     if (got < 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "stk-send: read error\n");
+#endif
         exit (-1);
     }
 #endif
@@ -156,7 +162,9 @@ again:
     if (! WriteFile (a->fd, hdr, 5, &written, 0) ||
         ! WriteFile (a->fd, cmd, cmdlen, &written, 0) ||
         ! WriteFile (a->fd, &sum, 1, &written, 0)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "stk-send: write error\n");
+#endif
         exit (-1);
     }
     }
@@ -164,7 +172,9 @@ again:
     if (write (a->fd, hdr, 5) < 0 ||
         write (a->fd, cmd, cmdlen) < 0 ||
         write (a->fd, &sum, 1) < 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "stk-send: write error\n");
+#endif
         exit (-1);
     }
 #endif
@@ -265,7 +275,9 @@ static void prog_enable (stk_adapter_t *a)
 
     if (! send_receive (a, cmd, 12, response, 2) || response[0] != cmd[0] ||
         response[1] != STATUS_CMD_OK) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Cannot enter programming mode.\n");
+#endif
         exit (-1);
     }
 }
@@ -281,7 +293,9 @@ static void chip_erase (stk_adapter_t *a)
 
     if (! send_receive (a, cmd, 7, response, 2) || response[0] != cmd[0] ||
         response[1] != STATUS_CMD_OK) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Cannot erase chip.\n");
+#endif
         exit (-1);
     }
 }
@@ -316,7 +330,9 @@ static void load_address (stk_adapter_t *a, unsigned addr)
 
     if (! send_receive (a, cmd, 5, response, 2) || response[0] != cmd[0] ||
         response[1] != STATUS_CMD_OK) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Load address failed.\n");
+#endif
         exit (-1);
     }
     a->last_load_addr = addr;
@@ -338,7 +354,9 @@ static void flush_write_buffer (stk_adapter_t *a)
     memcpy (cmd+10, a->page, PAGE_NBYTES);
     if (! send_receive (a, cmd, 10+PAGE_NBYTES, response, 2) ||
         response[0] != cmd[0]) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Program flash failed.\n");
+#endif
         exit (-1);
     }
     if (response[1] != STATUS_CMD_OK)
@@ -383,7 +401,9 @@ static void read_page (stk_adapter_t *a, unsigned addr,
         response[0] != cmd[0] ||
         response[1] != STATUS_CMD_OK ||
         response[2+PAGE_NBYTES] != STATUS_CMD_OK) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Read page failed.\n");
+#endif
         exit (-1);
     }
     memcpy (buf, response+2, PAGE_NBYTES);
@@ -428,7 +448,9 @@ static unsigned stk_read_word (adapter_t *adapter, unsigned addr)
     load_address (a, addr >> 1);
     if (! send_receive (a, cmd, 4, response, 7) || response[0] != cmd[0] ||
         response[1] != STATUS_CMD_OK || response[6] != STATUS_CMD_OK) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Read word failed.\n");
+#endif
         exit (-1);
     }
     return response[2] | response[3] << 8 |
@@ -444,7 +466,9 @@ static void stk_program_word (adapter_t *adapter,
     /* This function is needed for programming DEVCFG fuses.
      * Not supported by booloader. */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "stk: program word at %08x: %08x\n", addr, word);
+#endif
 }
 
 /*
@@ -518,14 +542,18 @@ static int open_port (stk_adapter_t *a, const char *devname)
     a->fd = CreateFile (devname, GENERIC_READ | GENERIC_WRITE,
         0, 0, OPEN_EXISTING, 0, 0);
     if (a->fd == INVALID_HANDLE_VALUE) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: Cannot open\n", devname);
+#endif
         return -1;
     }
 
     /* Set serial attributes */
     memset (&a->saved_mode, 0, sizeof(a->saved_mode));
     if (! GetCommState (a->fd, &a->saved_mode)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: Cannot get state\n", devname);
+#endif
         return -1;
     }
 
@@ -545,7 +573,9 @@ static int open_port (stk_adapter_t *a, const char *devname)
     new_mode.fAbortOnError = FALSE;
     new_mode.fBinary = TRUE;
     if (! SetCommState (a->fd, &new_mode)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: Cannot set state\n", devname);
+#endif
         return -1;
     }
 
@@ -554,7 +584,9 @@ static int open_port (stk_adapter_t *a, const char *devname)
     ctmo.ReadTotalTimeoutMultiplier = 0;
     ctmo.ReadTotalTimeoutConstant = 5000;
     if (! SetCommTimeouts (a->fd, &ctmo)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: Cannot set timeouts\n", devname);
+#endif
         return -1;
     }
 #else
@@ -596,7 +628,9 @@ adapter_t *adapter_open_stk500v2 (const char *port)
 
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Out of memory\n");
+#endif
         return 0;
     }
 

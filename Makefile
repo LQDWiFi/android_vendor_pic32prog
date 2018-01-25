@@ -1,9 +1,14 @@
 CC              = gcc
 
-SVNVERS         = $(shell git rev-parse --short HEAD)
+#SVNVERS         = $(shell git rev-parse --short HEAD)
 UNAME           = $(shell uname)
-CFLAGS          = -Wall -g -O -Ihidapi -DSVNVERSION='"$(SVNVERS)"'
+#CFLAGS          = -Wall -g -O -Ihidapi -DSVNVERSION='"$(SVNVERS)"'
 LDFLAGS         = -g
+
+VERSION         = $(shell head -n 1 debian/changelog | awk '{print $$2}' | tr -d '()')
+RELEASE         = $(shell head -n 1 debian/changelog | awk '{print $$3}' | tr -d ';')
+CFLAGS          = -Wall -g -fno-stack-protector -O -Ihidapi -DVERSION='"${VERSION}-${RELEASE}"'
+
 
 # Linux
 ifeq ($(UNAME),Linux)
@@ -19,13 +24,12 @@ ifeq ($(UNAME),Darwin)
 endif
 
 PROG_OBJS       = pic32prog.o target.o executive.o hid.o \
-                  adapter-pickit2.o adapter-hidboot.o adapter-an1388.o \
-                  adapter-bitbang.o adapter-stk500v2.o adapter-uhb.o \
+                  adapter-hidboot.o adapter-an1388.o \
                   family-mx1.o family-mx3.o family-mz.o
 
 # Olimex ARM-USB-Tiny JTAG adapter: requires libusb-0.1
-CFLAGS          += -DUSE_MPSSE
-PROG_OBJS       += adapter-mpsse.o
+#CFLAGS          += -DUSE_MPSSE
+#PROG_OBJS       += adapter-mpsse.o
 ifeq ($(UNAME),Linux)
     # Use 'sudo port install libusb-0.1-dev'
     LIBS        += -Wl,-Bstatic -lusb -Wl,-Bdynamic
@@ -68,13 +72,12 @@ clean:
 		rm -f *~ *.o core pic32prog adapter-mpsse pic32prog.po
 
 install:	pic32prog #pic32prog-ru.mo
-		install -c -s pic32prog /usr/local/bin/pic32prog
+		mkdir -p ${DESTDIR}/usr/bin
+		install -c -s pic32prog ${DESTDIR}/usr/bin/pic32prog
 #		install -c -m 444 pic32prog-ru.mo /usr/local/share/locale/ru/LC_MESSAGES/pic32prog.mo
 ###
 adapter-an1388.o: adapter-an1388.c adapter.h hidapi/hidapi.h pic32.h
 adapter-hidboot.o: adapter-hidboot.c adapter.h hidapi/hidapi.h pic32.h
-adapter-mpsse.o: adapter-mpsse.c adapter.h
-adapter-pickit2.o: adapter-pickit2.c adapter.h pickit2.h pic32.h
 executive.o: executive.c pic32.h
 pic32prog.o: pic32prog.c target.h localize.h
 target.o: target.c target.h adapter.h localize.h pic32.h

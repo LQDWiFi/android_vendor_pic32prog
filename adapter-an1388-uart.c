@@ -76,13 +76,21 @@ static void an1388_send (int port_fd, unsigned char *buf, unsigned nbytes)
 {
     if (debug_level > 0) {
         int k;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Send");
+#endif
         for (k=0; k<nbytes; ++k) {
             if (k != 0 && (k & 15) == 0)
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", buf[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     write (port_fd, buf, nbytes);
 }
@@ -111,13 +119,21 @@ static int an1388_recv (int port_fd, unsigned char *buf)
         res = read (port_fd, buf, 64);
 
         if (debug_level > 0) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "---Recv");
+#endif
             for (i=0; i<res; ++i) {
                 if (i != 0 && (i & 15) == 0)
+#if DO_DEBUG_PRINTS
                     fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, " %02x", buf[i]);
+#endif
             }
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "\n");
+#endif
         }
 
         return res;
@@ -146,13 +162,21 @@ static void an1388_command (an1388_adapter_t *a, unsigned char cmd,
 
     if (debug_level > 0) {
         int k;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Cmd%d", cmd);
+#endif
         for (k=0; k<data_len; ++k) {
             if (k != 0 && (k & 15) == 0)
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", data[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     memset (buf, FRAME_EOT, sizeof(buf));
     n = 0;
@@ -223,13 +247,21 @@ static void an1388_command (an1388_adapter_t *a, unsigned char cmd,
                 }
                 if (a->reply_len > 0 && debug_level > 0) {
                     int k;
+#if DO_DEBUG_PRINTS
                     fprintf (stderr, "--->>>>");
+#endif
                     for (k=0; k<a->reply_len; ++k) {
                         if (k != 0 && (k & 15) == 0)
+#if DO_DEBUG_PRINTS
                             fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
                         fprintf (stderr, " %02x", a->reply[k]);
+#endif
                     }
+#if DO_DEBUG_PRINTS
                     fprintf (stderr, "\n");
+#endif
                 }
                 return;
             }
@@ -276,7 +308,9 @@ static void an1388_program_word (adapter_t *adapter,
 {
     /* Not supported by booloader. */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uart: program word at %08x: %08x\n", addr, word);
+#endif
 }
 
 /*
@@ -289,7 +323,9 @@ static void an1388_verify_data (adapter_t *adapter,
     unsigned char request [8];
     unsigned data_crc, flash_crc, nbytes = nwords * 4;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "uart: verify %d bytes at %08x\n", nbytes, addr);
+#endif
     request[0] = addr;
     request[1] = addr >> 8;
     request[2] = addr >> 16;
@@ -300,14 +336,18 @@ static void an1388_verify_data (adapter_t *adapter,
     request[7] = nbytes >> 24;
     an1388_command (a, CMD_READ_CRC, request, 8);
     if (a->reply_len != 3 || a->reply[0] != CMD_READ_CRC) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uart: cannot read crc at %08x\n", addr);
+#endif
         exit (-1);
     }
     flash_crc = a->reply[1] | a->reply[2] << 8;
 
     data_crc = calculate_crc (0, (unsigned char*) data, nbytes);
     if (flash_crc != data_crc) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uart: checksum failed at %08x: sum=%04x, expected=%04x\n",
+#endif
             addr, flash_crc, data_crc);
         //exit (-1);
     }
@@ -333,7 +373,9 @@ static void set_flash_address (an1388_adapter_t *a, unsigned addr)
 
     an1388_command (a, CMD_PROGRAM_FLASH, request, 7);
     if (a->reply_len != 1 || a->reply[0] != CMD_PROGRAM_FLASH) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uart: error setting flash address at %08x\n", addr);
+#endif
         exit (-1);
     }
 }
@@ -354,7 +396,9 @@ static void program_flash (an1388_adapter_t *a,
     }
     if (empty)
         return;
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "uart: program %d bytes at %08x: %02x-%02x-...-%02x\n",
+#endif
     //    nbytes, addr, data[0], data[1], data[31]);
 
     request[0] = nbytes;
@@ -373,7 +417,9 @@ static void program_flash (an1388_adapter_t *a,
 
     an1388_command (a, CMD_PROGRAM_FLASH, request, nbytes + 5);
     if (a->reply_len != 1 || a->reply[0] != CMD_PROGRAM_FLASH) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uart: error programming flash at %08x\n", addr);
+#endif
         exit (-1);
     }
 }
@@ -403,10 +449,14 @@ static void an1388_erase_chip (adapter_t *adapter)
 {
     an1388_adapter_t *a = (an1388_adapter_t*) adapter;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "uart: erase chip\n");
+#endif
     an1388_command (a, CMD_ERASE_FLASH, 0, 0);
     if (a->reply_len != 1 || a->reply[0] != CMD_ERASE_FLASH) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uart: Erase failed\n");
+#endif
         exit (-1);
     }
 }
@@ -466,7 +516,9 @@ adapter_t *adapter_open_an1388_uart (const char *port)
 
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Out of memory\n");
+#endif
         return 0;
     }
     a->port_fd = fd;
