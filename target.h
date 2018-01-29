@@ -29,6 +29,7 @@ void target_verify_block (target_t *t, unsigned addr,
 
 int target_erase (target_t *t, int cmd_location);
 int target_copy_from_sqi_to_progmem(target_t *t, int cmd_location);
+int target_copy_checksum_to_sqiflash(target_t *t, int cmd_location);
 int target_erase_progmem (target_t *t);
 
 void target_program_block (target_t *t, unsigned addr,

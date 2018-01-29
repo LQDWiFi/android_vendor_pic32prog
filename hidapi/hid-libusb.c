@@ -44,13 +44,19 @@
 #include <wchar.h>
 
 /* GNU / LibUSB */
-#include <libusb-1.0/libusb.h>
+#include <libusb/libusb.h>
 #include "iconv.h"
 
 #include "hidapi.h"
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifdef __ANDROID__
+// Android API level 23 does not have pthread_barrier by default
+// Include a helper header from bionicfuture
+#include <pthread_barrier.h>
 #endif
 
 #ifdef DEBUG_PRINTF
