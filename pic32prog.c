@@ -803,9 +803,9 @@ int main (int argc, char **argv)
 
     setvbuf (stdout, (char *)NULL, _IOLBF, 0);
     setvbuf (stderr, (char *)NULL, _IOLBF, 0);
-    //printf (_("Programmer for Microchip PIC32 microcontrollers, Version %s\n"), VERSION);
+    printf (_("Programmer for Microchip PIC32 microcontrollers, Version %s\n"), VERSION);
     progname = argv[0];
-    //copyright = _("    Copyright: (C) 2011-2015 Serge Vakulenko");
+    copyright = _("    Copyright: (C) 2011-2015 Serge Vakulenko");
     signal (SIGINT, interrupted);
 #ifdef __linux__
     signal (SIGHUP, interrupted);
@@ -837,6 +837,7 @@ int main (int argc, char **argv)
         case 'd':
             target_port = optarg;
             continue;
+#endif
         case 'h':
             break;
         case 'V':
@@ -848,13 +849,13 @@ int main (int argc, char **argv)
         case 'W':
             gpl_show_warranty ();
             return 0;
+#if 0
         case 'S':
             ++skip_verify;
             continue;
 #endif
         }
 usage:
-#if 0
         printf ("%s.\n\n", copyright);
         printf ("PIC32prog comes with ABSOLUTELY NO WARRANTY; for details\n");
         printf ("use `--warranty' option. This is Open Source software. You are\n");
@@ -871,21 +872,24 @@ usage:
         printf ("       file.srec           Code file in SREC format\n");
         printf ("       file.hex            Code file in Intel HEX format\n");
         printf ("       file.bin            Code file in binary format\n");
+#if 0
         printf ("       -v                  Verify only\n");
         printf ("       -r                  Read mode\n");
         printf ("       -d device           Use serial device\n");
         printf ("       -p                  Leave board powered on\n");
+#endif
         printf ("       -D                  Debug mode\n");
         printf ("       -h, --help          Print this help message\n");
         printf ("       -V, --version       Print version\n");
         printf ("       -C, --copying       Print copying information\n");
         printf ("       -W, --warranty      Print warranty information\n");
+#if 0
         printf ("       -S, --skip-verify   Skip the write verification step\n");
-        printf ("\n");
 #endif
+        printf ("\n");
         return 0;
     }
-    //printf ("%s\n", copyright);
+    printf ("%s\n", copyright);
     argc -= optind;
     argv += optind;
 
