@@ -133,7 +133,9 @@ static void serial_execution (bitbang_adapter_t *a)
 
     /* Enter serial execution. */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: enter serial execution\n", a->name);
+#endif
 
     bitbang_send (a, 1, 1, 5, TAP_SW_ETAP, 0);    /* Send command. */
     bitbang_send (a, 1, 1, 5, ETAP_EJTAGBOOT, 0); /* Send command. */
@@ -146,10 +148,14 @@ static void serial_execution (bitbang_adapter_t *a)
     bitbang_send (a, 0, 0, 8, MCHP_STATUS, 1);    /* Xfer data. */
     unsigned status = bitbang_recv (a);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
     if ((status & ~MCHP_STATUS_DEVRST) !=
         (MCHP_STATUS_CPS | MCHP_STATUS_CFGRDY | MCHP_STATUS_FAEN)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x (reset)\n", a->name, status);
+#endif
         exit (-1);
     }
 
@@ -163,10 +169,14 @@ static void serial_execution (bitbang_adapter_t *a)
     bitbang_send (a, 0, 0, 8, MCHP_STATUS, 1);    /* Xfer data. */
     status = bitbang_recv (a);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
     if (status != (MCHP_STATUS_CPS | MCHP_STATUS_CFGRDY |
                    MCHP_STATUS_FAEN)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x (no reset)\n", a->name, status);
+#endif
         exit (-1);
     }
 
@@ -185,7 +195,9 @@ static void xfer_instruction (bitbang_adapter_t *a, unsigned instruction)
     unsigned ctl;
 
     if (debug_level > 1)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: xfer instruction %08x\n", a->name, instruction);
+#endif
 
     // Select Control Register
     bitbang_send (a, 1, 1, 5, ETAP_CONTROL, 0);       /* Send command. */
@@ -239,7 +251,9 @@ static unsigned get_pe_response (bitbang_adapter_t *a)
     bitbang_send (a, 0, 0, 32, CONTROL_PROBEN |       /* Send data. */
                              CONTROL_PROBTRAP, 0);
     if (debug_level > 1)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: get PE response %08x\n", a->name, response);
+#endif
     return response;
 }
 
@@ -254,7 +268,9 @@ static unsigned bitbang_read_word (adapter_t *adapter, unsigned addr)
 
     serial_execution (a);
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: read word from %08x\n", a->name, addr);
+#endif
     xfer_instruction (a, 0x3c04bf80);           // lui s3, 0xFF20
     xfer_instruction (a, 0x3c080000 | addr_hi); // lui t0, addr_hi
     xfer_instruction (a, 0x35080000 | addr_lo); // ori t0, addr_lo
@@ -266,7 +282,9 @@ static unsigned bitbang_read_word (adapter_t *adapter, unsigned addr)
     unsigned word = bitbang_recv (a) >> 1;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: read word at %08x -> %08x\n", a->name, addr, word);
+#endif
     return word;
 }
 
@@ -279,7 +297,9 @@ static void bitbang_read_data (adapter_t *adapter,
     bitbang_adapter_t *a = (bitbang_adapter_t*) adapter;
     unsigned words_read, i;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: read %d bytes from %08x\n", a->name, nwords*4, addr);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
         for (; nwords > 0; nwords--) {
@@ -298,7 +318,9 @@ static void bitbang_read_data (adapter_t *adapter,
 
         unsigned response = get_pe_response (a);    /* Get response */
         if (response != PE_READ << 16) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: bad READ response = %08x, expected %08x\n",
+#endif
                 a->name, response, PE_READ << 16);
             exit (-1);
         }
@@ -321,7 +343,9 @@ static void bitbang_load_executive (adapter_t *adapter,
     serial_execution (a);
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: download PE loader\n", a->name);
+#endif
 
     /* Step 1. */
     xfer_instruction (a, 0x3c04bf88);   // lui a0, 0xbf88
@@ -375,7 +399,9 @@ static void bitbang_load_executive (adapter_t *adapter,
 
     /* Download the PE itself (step 7-B). */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: download PE\n", a->name);
+#endif
     for (i=0; i<nwords; i++) {
         xfer_fastdata (a, *pe++);
     }
@@ -391,12 +417,16 @@ static void bitbang_load_executive (adapter_t *adapter,
 
     unsigned version = get_pe_response (a);
     if (version != (PE_EXEC_VERSION << 16 | pe_version)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: bad PE version = %08x, expected %08x\n",
+#endif
             a->name, version, PE_EXEC_VERSION << 16 | pe_version);
         exit (-1);
     }
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: PE version = %04x\n",
+#endif
             a->name, version & 0xffff);
 }
 
@@ -426,10 +456,14 @@ static void bitbang_program_word (adapter_t *adapter,
     bitbang_adapter_t *a = (bitbang_adapter_t*) adapter;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: program word at %08x: %08x\n", a->name, addr, word);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -443,7 +477,9 @@ static void bitbang_program_word (adapter_t *adapter,
 
     unsigned response = get_pe_response (a);
     if (response != (PE_WORD_PROGRAM << 16)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program word %08x at %08x, reply = %08x\n",
+#endif
             a->name, word, addr, response);
         exit (-1);
     }
@@ -459,11 +495,15 @@ static void bitbang_program_row (adapter_t *adapter, unsigned addr,
     int i;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: row program %u words at %08x\n",
+#endif
             a->name, words_per_row, addr);
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -483,7 +523,9 @@ static void bitbang_program_row (adapter_t *adapter, unsigned addr,
 
     unsigned response = get_pe_response (a);
     if (response != (PE_ROW_PROGRAM << 16)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program row at %08x, reply = %08x\n",
+#endif
             a->name, addr, response);
         exit (-1);
     }
@@ -498,10 +540,14 @@ static void bitbang_verify_data (adapter_t *adapter,
     bitbang_adapter_t *a = (bitbang_adapter_t*) adapter;
     unsigned data_crc, flash_crc;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: verify %d words at %08x\n", a->name, nwords, addr);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow verify not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -515,7 +561,9 @@ static void bitbang_verify_data (adapter_t *adapter,
 
     unsigned response = get_pe_response (a);
     if (response != (PE_GET_CRC << 16)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to verify %d words at %08x, reply = %08x\n",
+#endif
             a->name, nwords, addr, response);
         exit (-1);
     }
@@ -523,7 +571,9 @@ static void bitbang_verify_data (adapter_t *adapter,
 
     data_crc = calculate_crc (0xffff, (unsigned char*) data, nwords * 4);
     if (flash_crc != data_crc) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: checksum failed at %08x: sum=%04x, expected=%04x\n",
+#endif
             a->name, addr, flash_crc, data_crc);
         //exit (-1);
     }
@@ -540,14 +590,18 @@ adapter_t *adapter_open_bitbang (const char *port)
 
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "adapter_open_bitbang: out of memory\n");
+#endif
         return 0;
     }
 
     // TODO: find and open the connection to serial device `port'.
     a->devfd = 0;
     if (! a->devfd) {
+#if DO_DEBUG_PRINTS
         // TODO: fprintf (stderr, "%s: Bitbang adapter not found\n", port);
+#endif
         free (a);
         return 0;
     }
@@ -568,7 +622,9 @@ adapter_t *adapter_open_bitbang (const char *port)
     if ((idcode & 0xfff) != 0x053) {
         /* Microchip vendor ID is expected. */
         if (debug_level > 0 || (idcode != 0 && idcode != 0xffffffff))
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: incompatible CPU detected, IDCODE=%08x\n",
+#endif
                 a->name, idcode);
         bitbang_reset (a, 0, 0, 0);
 failed:
@@ -588,10 +644,14 @@ failed:
     bitbang_send (a, 0, 0, 8, MCHP_STATUS, 1);    /* Xfer data. */
     unsigned status = bitbang_recv (a);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
     if ((status & ~MCHP_STATUS_DEVRST) !=
         (MCHP_STATUS_CPS | MCHP_STATUS_CFGRDY | MCHP_STATUS_FAEN)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x\n", a->name, status);
+#endif
         bitbang_reset (a, 0, 0, 0);
         goto failed;
     }

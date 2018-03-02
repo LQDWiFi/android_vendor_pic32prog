@@ -22,8 +22,11 @@
 
 #include "target.h"
 #include "localize.h"
+#include "hidapi/hidapi.h"
 
+#ifndef VERSION
 #define VERSION         "2.0."SVNVERSION
+#endif
 #define MINBLOCKSZ      128
 #define FLASHV_BASE     0x9d000000
 #define BOOTV_BASE      0x9fc00000
@@ -48,6 +51,11 @@ unsigned boot_bytes;
 unsigned flash_bytes;
 unsigned devcfg_offset;         /* Offset of devcfg registers in boot data */
 int total_bytes;
+unsigned short gFlashChecksum = 0;
+
+#if 0
+FILE *fp;
+#endif
 
 #define devcfg3 (*(unsigned*) &boot_data [devcfg_offset])
 #define devcfg2 (*(unsigned*) &boot_data [devcfg_offset + 4])
@@ -106,15 +114,40 @@ void store_data (unsigned address, unsigned byte)
         offset = address - FLASHV_BASE;
         flash_data [offset] = byte;
         flash_used = 1;
+#if 0      
+        if (offset%4 == 0)
+        {
+            fprintf(fp, "0x%X :", address );
+        }
+        fprintf(fp, "0x%X ", flash_data[offset]);
+        if (offset%4 == 3)
+        {
+            fprintf(fp, "\n");
+        }
+#endif 
 
     } else if (address >= FLASHP_BASE && address < FLASHP_BASE + FLASH_BYTES) {
         /* Main flash memory, physical. */
         offset = address - FLASHP_BASE;
         flash_data [offset] = byte;
         flash_used = 1;
+#if 0
+        if (offset%4 == 0)
+        {
+            fprintf(fp, "0x%X :", address );
+        }
+        fprintf(fp, "0x%X ", flash_data[offset]);
+        if (offset%4 == 3)
+        {
+            fprintf(fp, "\n");
+        }
+#endif 
+ 
     } else {
         /* Ignore incorrect data. */
+#if DO_DEBUG_PRINTS
         //fprintf (stderr, _("%08X: address out of flash memory\n"), address);
+#endif
         return;
     }
     total_bytes++;
@@ -148,7 +181,9 @@ int read_srec (char *filename)
 
         /* Starting an S-record.  */
         if (! isxdigit (buf[2]) || ! isxdigit (buf[3])) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, _("%s: bad SREC record: %s\n"), filename, buf);
+#endif
             exit (1);
         }
         bytes = HEX (buf + 2);
@@ -187,91 +222,147 @@ int read_srec (char *filename)
     return 1;
 }
 
-/*
- * Read HEX file.
- */
-int read_hex (char *filename)
+static const unsigned int crc15Table[256] = {
+
+    0x0,0xc599, 0xceab, 0xb32, 0xd8cf, 0x1d56, 0x1664, 0xd3fd, 0xf407, 0x319e, 0x3aac,  //!<precomputed CRC15 Table
+
+    0xff35, 0x2cc8, 0xe951, 0xe263, 0x27fa, 0xad97, 0x680e, 0x633c, 0xa6a5, 0x7558, 0xb0c1,
+
+    0xbbf3, 0x7e6a, 0x5990, 0x9c09, 0x973b, 0x52a2, 0x815f, 0x44c6, 0x4ff4, 0x8a6d, 0x5b2e,
+
+    0x9eb7, 0x9585, 0x501c, 0x83e1, 0x4678, 0x4d4a, 0x88d3, 0xaf29, 0x6ab0, 0x6182, 0xa41b,
+
+    0x77e6, 0xb27f, 0xb94d, 0x7cd4, 0xf6b9, 0x3320, 0x3812, 0xfd8b, 0x2e76, 0xebef, 0xe0dd,
+
+    0x2544, 0x2be, 0xc727, 0xcc15, 0x98c, 0xda71, 0x1fe8, 0x14da, 0xd143, 0xf3c5, 0x365c,
+
+    0x3d6e, 0xf8f7,0x2b0a, 0xee93, 0xe5a1, 0x2038, 0x7c2, 0xc25b, 0xc969, 0xcf0, 0xdf0d,
+
+    0x1a94, 0x11a6, 0xd43f, 0x5e52, 0x9bcb, 0x90f9, 0x5560, 0x869d, 0x4304, 0x4836, 0x8daf,
+
+    0xaa55, 0x6fcc, 0x64fe, 0xa167, 0x729a, 0xb703, 0xbc31, 0x79a8, 0xa8eb, 0x6d72, 0x6640,
+
+    0xa3d9, 0x7024, 0xb5bd, 0xbe8f, 0x7b16, 0x5cec, 0x9975, 0x9247, 0x57de, 0x8423, 0x41ba,
+
+    0x4a88, 0x8f11, 0x57c, 0xc0e5, 0xcbd7, 0xe4e, 0xddb3, 0x182a, 0x1318, 0xd681, 0xf17b,
+
+    0x34e2, 0x3fd0, 0xfa49, 0x29b4, 0xec2d, 0xe71f, 0x2286, 0xa213, 0x678a, 0x6cb8, 0xa921,
+
+    0x7adc, 0xbf45, 0xb477, 0x71ee, 0x5614, 0x938d, 0x98bf, 0x5d26, 0x8edb, 0x4b42, 0x4070,
+
+    0x85e9, 0xf84, 0xca1d, 0xc12f, 0x4b6, 0xd74b, 0x12d2, 0x19e0, 0xdc79, 0xfb83, 0x3e1a, 0x3528,
+
+    0xf0b1, 0x234c, 0xe6d5, 0xede7, 0x287e, 0xf93d, 0x3ca4, 0x3796, 0xf20f, 0x21f2, 0xe46b, 0xef59,
+
+    0x2ac0, 0xd3a, 0xc8a3, 0xc391, 0x608, 0xd5f5, 0x106c, 0x1b5e, 0xdec7, 0x54aa, 0x9133, 0x9a01,
+
+    0x5f98, 0x8c65, 0x49fc, 0x42ce, 0x8757, 0xa0ad, 0x6534, 0x6e06, 0xab9f, 0x7862, 0xbdfb, 0xb6c9,
+
+    0x7350, 0x51d6, 0x944f, 0x9f7d, 0x5ae4, 0x8919, 0x4c80, 0x47b2, 0x822b, 0xa5d1, 0x6048, 0x6b7a,
+
+    0xaee3, 0x7d1e, 0xb887, 0xb3b5, 0x762c, 0xfc41, 0x39d8, 0x32ea, 0xf773, 0x248e, 0xe117, 0xea25,
+
+    0x2fbc, 0x846, 0xcddf, 0xc6ed, 0x374, 0xd089, 0x1510, 0x1e22, 0xdbbb, 0xaf8, 0xcf61, 0xc453,
+
+    0x1ca, 0xd237, 0x17ae, 0x1c9c, 0xd905, 0xfeff, 0x3b66, 0x3054, 0xf5cd, 0x2630, 0xe3a9, 0xe89b,
+
+    0x2d02, 0xa76f, 0x62f6, 0x69c4, 0xac5d, 0x7fa0, 0xba39, 0xb10b, 0x7492, 0x5368, 0x96f1, 0x9dc3,
+
+    0x585a, 0x8ba7, 0x4e3e, 0x450c, 0x8095
+
+};
+
+
+
+unsigned short compute_checksum(unsigned long len, unsigned char *data1)
+
 {
-    FILE *fd;
-    unsigned char buf [256], data[16], record_type, sum;
-    unsigned address, high;
-    int bytes, i;
 
-    fd = fopen (filename, "r");
-    if (! fd) {
-        perror (filename);
-        exit (1);
+    unsigned short remainder,addr;
+
+    unsigned long i = 0;
+
+
+
+    remainder = 16;//initialize the PEC
+
+    for (i = 0; i<len; i++) // loops for each byte in data array
+
+    {
+
+        addr = ((remainder>>7)^data1[i])&0xff;//calculate PEC table address
+
+        remainder = (remainder<<8)^crc15Table[addr];
+
     }
-    high = 0;
-    while (fgets ((char*) buf, sizeof(buf), fd)) {
-        if (buf[0] == '\n')
-            continue;
-        if (buf[0] != ':') {
-            fclose (fd);
-            return 0;
-        }
-        if (! isxdigit (buf[1]) || ! isxdigit (buf[2]) ||
-            ! isxdigit (buf[3]) || ! isxdigit (buf[4]) ||
-            ! isxdigit (buf[5]) || ! isxdigit (buf[6]) ||
-            ! isxdigit (buf[7]) || ! isxdigit (buf[8])) {
-            fprintf (stderr, _("%s: bad HEX record: %s\n"), filename, buf);
-            exit (1);
-        }
-	record_type = HEX (buf+7);
-	if (record_type == 1) {
-	    /* End of file. */
-            break;
-        }
-	if (record_type == 5) {
-	    /* Start address, ignore. */
-	    continue;
-	}
 
-	bytes = HEX (buf+1);
-	if (strlen ((char*) buf) < bytes * 2 + 11) {
-            fprintf (stderr, _("%s: too short hex line\n"), filename);
-            exit (1);
-        }
-	address = high << 16 | HEX (buf+3) << 8 | HEX (buf+5);
-        if (address & 3) {
-            fprintf (stderr, _("%s: odd address\n"), filename);
-            exit (1);
-        }
+    return(remainder*2);//The CRC15 has a 0 in the LSB so the remainder must be multiplied by 2
 
-	sum = 0;
-	for (i=0; i<bytes; ++i) {
-            data [i] = HEX (buf+9 + i + i);
-	    sum += data [i];
-	}
-	sum += record_type + bytes + (address & 0xff) + (address >> 8 & 0xff);
-	if (sum != (unsigned char) - HEX (buf+9 + bytes + bytes)) {
-            fprintf (stderr, _("%s: bad HEX checksum\n"), filename);
-            exit (1);
-        }
+}
 
-	if (record_type == 4) {
-	    /* Extended address. */
-            if (bytes != 2) {
-                fprintf (stderr, _("%s: invalid HEX linear address record length\n"),
-                    filename);
-                exit (1);
-            }
-	    high = data[0] << 8 | data[1];
-	    continue;
-	}
-	if (record_type != 0) {
-            fprintf (stderr, _("%s: unknown HEX record type: %d\n"),
-                filename, record_type);
-            exit (1);
-        }
-        //printf ("%08x: %u bytes\n", address, bytes);
-        for (i=0; i<bytes; i++) {
-            store_data (address++, data [i]);
-        }
+int read_bin (char *filename)
+{
+    FILE *fbin;
+#if 0
+    FILE *ftmp;
+#endif
+    char checksum_str[3];
+    char bin_data[2];
+    char bin_data_str[3];
+    int i=0;
+    int offset = 0;
+    unsigned short checksum_comp = 0;
+#if 0
+    printf("Entered read_bin\n");
+    ftmp = fopen("/home/ems/Data_Files/read_data7.txt", "w");
+#endif
+
+    fbin = fopen(filename, "r");
+    if (!fbin)
+    {
+        perror(filename);
+        exit(1);
     }
-    fclose (fd);
+
+    fgets((char *) checksum_str, sizeof(checksum_str), fbin);
+    
+    gFlashChecksum = (unsigned short) ( (((checksum_str[0] & 0xF0) >> 4) << 12) | (((checksum_str[0] & 0x0F) ) << 8) |
+                                        (checksum_str[1] & 0xF0)  | (checksum_str[1] & 0x0F) );
+
+
+
+#if 0
+    fprintf(ftmp, "Checksum From Bin File: %X\n", gFlashChecksum);
+#endif
+
+    while(fgets((char *) bin_data, sizeof(bin_data), fbin))
+    {
+         flash_data[offset] = (unsigned char)  bin_data[0];
+#if 0
+         fprintf(ftmp, "flash_data[%d] = %02X\n", offset, flash_data[offset]);
+#endif
+         offset++;
+    }
+    flash_used = 1;
+    checksum_comp = compute_checksum(FLASH_BYTES, flash_data);
+#if 0
+    printf("checksum_comp : %04X\n", checksum_comp);
+    printf("gFlashChecksum : %04X\n", gFlashChecksum);
+#endif
+    if (gFlashChecksum != checksum_comp)
+    {
+        printf("Error: Invalid checksum. Bin file corrupted.\n");
+        printf("Firmware download aborted.\n");
+        exit(1);
+    }
+    fclose(fbin);
+#if 0
+    fclose(ftmp);
+    printf("Exiting read_bin\n");
+#endif
     return 1;
 }
+
 
 void print_symbols (char symbol, int cnt)
 {
@@ -290,16 +381,20 @@ void progress (unsigned step)
 
 void quit (void)
 {
+    //fprintf(stderr, "Calling quit\n");
     if (target != 0) {
         target_close (target, power_on);
         free (target);
         target = 0;
     }
+    printf("\n");
 }
 
 void interrupted (int signum)
 {
+#if DO_DEBUG_PRINTS
     fprintf (stderr, _("\nInterrupted.\n"));
+#endif
     quit();
     _exit (-1);
 }
@@ -343,7 +438,9 @@ void do_probe ()
     atexit (quit);
     target = target_open (target_port);
     if (! target) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, _("Error detecting device -- check cable!\n"));
+#endif
         exit (1);
     }
     boot_bytes = target_boot_bytes (target);
@@ -358,7 +455,7 @@ void do_probe ()
 /*
  * Write flash memory.
  */
-void program_block (target_t *mc, unsigned addr)
+void program_block (target_t *mc, unsigned addr, int cmd_location)
 {
     unsigned char *data;
     unsigned offset;
@@ -376,7 +473,27 @@ void program_block (target_t *mc, unsigned addr)
         data = flash_data;
         offset = addr - FLASHP_BASE;
     }
-    target_program_block (mc, addr, blocksz/4, (unsigned*) (data + offset));
+#if DO_DEBUG_PRINTS
+    //fprintf(stderr, "Calling target_program_block\n");
+#endif
+#if 0
+    //if (( addr >= 0x1d03F400) && (addr < 0x1d040000))
+    {
+        int ctr = 0;
+        int lp = 0;
+        for (ctr = 0; ctr < (blocksz); ctr++)
+        {
+            //if ( ((offset+ctr) >= 0x3F580) && ((offset+ctr) <= 0x3F59C))
+            {
+            if (lp%16 == 0)
+               fprintf(fp, " 0x%X: \n", (offset+ctr));
+            fprintf(fp, "0x%X ", (unsigned *) *(data+offset+ctr));
+            lp++;
+            }
+        } 
+    }
+#endif
+    target_program_block (mc, addr, blocksz/4, (unsigned*) (data + offset), cmd_location);
 }
 
 int verify_block (target_t *mc, unsigned addr)
@@ -401,45 +518,61 @@ int verify_block (target_t *mc, unsigned addr)
     return 1;
 }
 
-void do_program (char *filename)
+void do_program (char *filename, int cmd_location)
 {
     unsigned addr;
     int progress_len, progress_step, boot_progress_len;
     void *t0;
+    int ret_val;
+    static int do_prog_cnt = 0;
 
     /* Open and detect the device. */
     atexit (quit);
     target = target_open (target_port);
     if (! target) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, _("Error detecting device -- check cable!\n"));
+#endif
         exit (1);
     }
-    flash_bytes = target_flash_bytes (target);
+    flash_bytes = 0x200000; //target_flash_bytes (target);
     boot_bytes = target_boot_bytes (target);
     blocksz = target_block_size (target);
     devcfg_offset = target_devcfg_offset (target);
+#if 0
     printf (_("    Processor: %s\n"), target_cpu_name (target));
     printf (_(" Flash memory: %d kbytes\n"), flash_bytes / 1024);
     if (boot_bytes > 0)
         printf (_("  Boot memory: %d kbytes\n"), boot_bytes / 1024);
     printf (_("         Data: %d bytes\n"), total_bytes);
+#endif
 
     /* Verify DEVCFGx values. */
     if (boot_used) {
         if (devcfg0 == 0xffffffff) {
+#if 0
+#if DO_DEBUG_PRINTS
             fprintf (stderr, _("DEVCFG values are missing -- check your HEX file!\n"));
+#endif
             exit (1);
+#endif
         }
         if (devcfg_offset == 0xffc0) {
             /* For MZ family, clear the bit DEVSIGN0[31]. */
             boot_data[0xFFEF] &= 0x7f;
         }
     }
-
+#if 0
     if (! verify_only) {
         /* Erase flash. */
         target_erase (target);
     }
+#endif    
+    ret_val = target_erase (target, cmd_location);
+#if 1    
+    sleep(3);
+#endif    
+
     target_use_executive (target);
 
     /* Compute dirty bits for every block. */
@@ -478,71 +611,36 @@ void do_program (char *filename)
 
     progress_count = 0;
     t0 = fix_time ();
-    if (! verify_only) {
+
         if (flash_used) {
+#if 0
             printf (_("Program flash: "));
             print_symbols ('.', progress_len);
             print_symbols ('\b', progress_len);
+#endif
             fflush (stdout);
             for (addr=0; addr<flash_bytes; addr+=blocksz) {
-                if (flash_dirty [addr / blocksz]) {
-                    program_block (target, addr + FLASHV_BASE);
+                if (flash_dirty [addr / blocksz]) 
+                {
+                    program_block (target, addr + FLASHV_BASE, cmd_location);
                     progress (progress_step);
+                    //fprintf(stderr, "program_block progress : %d\n", do_prog_cnt);
+                    do_prog_cnt++;
                 }
             }
+#if 0
             printf (_("# done\n"));
+#endif
         }
-        if (boot_used) {
-            printf (_(" Program boot: "));
-            print_symbols ('.', boot_progress_len);
-            print_symbols ('\b', boot_progress_len);
-            fflush (stdout);
-            for (addr=0; addr<boot_bytes; addr+=blocksz) {
-                if (boot_dirty [addr / blocksz]) {
-                    program_block (target, addr + BOOTV_BASE);
-                    progress (1);
-                }
-            }
-            printf (_("# done      \n"));
-            if (! boot_dirty [devcfg_offset / blocksz]) {
-                /* Write chip configuration. */
-                target_program_devcfg (target,
-                    devcfg0, devcfg1, devcfg2, devcfg3);
-                boot_dirty [devcfg_offset / blocksz] = 1;
-            }
-        }
-    }
-    if (flash_used && !skip_verify) {
-        printf (_(" Verify flash: "));
-        print_symbols ('.', progress_len);
-        print_symbols ('\b', progress_len);
-        fflush (stdout);
-        for (addr=0; addr<flash_bytes; addr+=blocksz) {
-            if (flash_dirty [addr / blocksz]) {
-                progress (progress_step);
-                if (! verify_block (target, addr + FLASHV_BASE))
-                    exit (0);
-            }
-        }
-        printf (_(" done\n"));
-    }
-    if (boot_used && !skip_verify) {
-        printf (_("  Verify boot: "));
-        print_symbols ('.', boot_progress_len);
-        print_symbols ('\b', boot_progress_len);
-        fflush (stdout);
-        for (addr=0; addr<boot_bytes; addr+=blocksz) {
-            if (boot_dirty [addr / blocksz]) {
-                progress (1);
-                if (! verify_block (target, addr + BOOTV_BASE))
-                    exit (0);
-            }
-        }
-        printf (_(" done       \n"));
-    }
-    if (boot_used || flash_used)
-        printf (_("Rate: %ld bytes per second\n"),
-            total_bytes * 1000L / mseconds_elapsed (t0));
+
+        sleep(10);
+        target_copy_checksum_to_sqiflash(target, cmd_location);
+	sleep(60); //180
+	target_erase_progmem (target);
+	sleep(6); //60
+	target_copy_from_sqi_to_progmem (target, cmd_location);
+	sleep(45); //150
+        printf("\nDone.");
 }
 
 void do_read (char *filename, unsigned base, unsigned nbytes)
@@ -565,7 +663,9 @@ void do_read (char *filename, unsigned base, unsigned nbytes)
     atexit (quit);
     target = target_open (target_port);
     if (! target) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, _("Error detecting device -- check cable!\n"));
+#endif
         exit (1);
     }
     target_use_executive (target);
@@ -585,7 +685,9 @@ void do_read (char *filename, unsigned base, unsigned nbytes)
         progress (progress_step);
         target_read_block (target, addr, blocksz/4, data);
         if (fwrite (data, 1, blocksz, fd) != blocksz) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: write error!\n", filename);
+#endif
             exit (1);
         }
     }
@@ -611,6 +713,31 @@ static void gpl_show_copying (void)
     printf ("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n");
     printf ("GNU General Public License for more details.\n");
     printf ("\n");
+}
+
+
+void do_sqi_to_progmem_copy_and_run(int cmd_location)
+{
+    unsigned addr;
+    int progress_len, progress_step, boot_progress_len;
+    void *t0;
+    int ret_val;
+    static int do_prog_cnt = 0;
+
+    /* Open and detect the device. */
+    atexit (quit);
+    target = target_open (target_port);
+    if (! target) {
+#if DO_DEBUG_PRINTS
+        fprintf (stderr, _("Error detecting device -- check cable!\n"));
+#endif
+        exit (1);
+    }
+    target_erase_progmem (target);
+    sleep(6); //60
+    target_copy_from_sqi_to_progmem (target, cmd_location);
+    sleep(45); //150
+    printf("Done.");
 }
 
 /*
@@ -645,6 +772,7 @@ int main (int argc, char **argv)
 {
     int ch, read_mode = 0;
     unsigned base, nbytes;
+    int cmd_location;
     static const struct option long_options[] = {
         { "help",        0, 0, 'h' },
         { "warranty",    0, 0, 'W' },
@@ -653,6 +781,11 @@ int main (int argc, char **argv)
         { "skip-verify", 0, 0, 'S' },
         { NULL,          0, 0, 0 },
     };
+
+
+#if 0
+    fp = fopen("log_bin_data_1.bin", "w");
+#endif
 
     /* Set locale and message catalogs. */
     setlocale (LC_ALL, "");
@@ -679,15 +812,22 @@ int main (int argc, char **argv)
 #endif
     signal (SIGTERM, interrupted);
 
-    while ((ch = getopt_long (argc, argv, "vDhrpCVWSd:",
+    while ((ch = getopt_long (argc, argv, "vDRhrpCVWSd:",
       long_options, 0)) != -1) {
         switch (ch) {
+#if 0
         case 'v':
             ++verify_only;
             continue;
+#endif
         case 'D':
             ++debug_level;
             continue;
+        case 'R':
+            cmd_location = 1;
+            do_sqi_to_progmem_copy_and_run(cmd_location);
+            return 0;
+#if 0
         case 'r':
             ++read_mode;
             continue;
@@ -697,6 +837,7 @@ int main (int argc, char **argv)
         case 'd':
             target_port = optarg;
             continue;
+#endif
         case 'h':
             break;
         case 'V':
@@ -708,9 +849,11 @@ int main (int argc, char **argv)
         case 'W':
             gpl_show_warranty ();
             return 0;
+#if 0
         case 'S':
             ++skip_verify;
             continue;
+#endif
         }
 usage:
         printf ("%s.\n\n", copyright);
@@ -729,16 +872,20 @@ usage:
         printf ("       file.srec           Code file in SREC format\n");
         printf ("       file.hex            Code file in Intel HEX format\n");
         printf ("       file.bin            Code file in binary format\n");
+#if 0
         printf ("       -v                  Verify only\n");
         printf ("       -r                  Read mode\n");
         printf ("       -d device           Use serial device\n");
         printf ("       -p                  Leave board powered on\n");
+#endif
         printf ("       -D                  Debug mode\n");
         printf ("       -h, --help          Print this help message\n");
         printf ("       -V, --version       Print version\n");
         printf ("       -C, --copying       Print copying information\n");
         printf ("       -W, --warranty      Print warranty information\n");
+#if 0
         printf ("       -S, --skip-verify   Skip the write verification step\n");
+#endif
         printf ("\n");
         return 0;
     }
@@ -754,12 +901,25 @@ usage:
         do_probe ();
         break;
     case 1:
-        if (! read_srec (argv[0]) &&
-            ! read_hex (argv[0])) {
+        if ( ! read_bin (argv[0])) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, _("%s: bad file format\n"), argv[0]);
+#endif
             exit (1);
         }
-        do_program (argv[0]);
+        cmd_location = 1;
+        do_program (argv[0], cmd_location);
+        break;
+    case 2:
+        if ( ! read_bin (argv[0])) {
+#if DO_DEBUG_PRINTS
+            fprintf (stderr, _("%s: bad file format\n"), argv[0]);
+#endif
+            exit (1);
+        }
+        cmd_location = strtoul(argv[1], NULL, 0);
+        //printf("main(): cmd_location: %d\n", cmd_location);
+        do_program (argv[0], cmd_location);
         break;
     case 3:
         if (! read_mode)
@@ -772,5 +932,8 @@ usage:
         goto usage;
     }
     quit ();
+#if 0
+    fclose(fp);
+#endif
     return 0;
 }

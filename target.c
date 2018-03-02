@@ -19,6 +19,7 @@
 #include "adapter.h"
 #include "localize.h"
 #include "pic32.h"
+#include "hidapi.h"
 
 typedef void print_func_t (unsigned cfg0, unsigned cfg1,
                            unsigned cfg2, unsigned cfg3);
@@ -238,13 +239,16 @@ target_t *target_open (const char *port_name)
 
     t = calloc (1, sizeof (target_t));
     if (! t) {
+#if 1 //DO_DEBUG_PRINTS
         fprintf (stderr, _("Out of memory\n"));
+#endif
         exit (-1);
     }
     t->cpu_name = "Unknown";
 
     /* Find adapter. */
     if (port_name) {
+#if 0
         t->adapter = adapter_open_stk500v2 (port_name);
 #ifdef USE_AN1388_UART
         if (! t->adapter)
@@ -252,7 +256,9 @@ target_t *target_open (const char *port_name)
 #endif
         if (! t->adapter)
             t->adapter = adapter_open_bitbang (port_name);
+#endif //#if 0
     } else {
+#if 0
         t->adapter = adapter_open_pickit ();
 #ifdef USE_MPSSE
         if (! t->adapter)
@@ -260,14 +266,21 @@ target_t *target_open (const char *port_name)
 #endif
         if (! t->adapter)
             t->adapter = adapter_open_hidboot ();
+#endif
         if (! t->adapter)
             t->adapter = adapter_open_an1388 ();
+#if 0
         if (! t->adapter)
             t->adapter = adapter_open_uhb ();
+#endif
     }
     if (! t->adapter) {
+#if 1 //DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
+#if 1 //DO_DEBUG_PRINTS
         fprintf (stderr, _("No target found.\n"));
+#endif
         exit (-1);
     }
 
@@ -275,7 +288,9 @@ target_t *target_open (const char *port_name)
     t->cpuid = t->adapter->get_idcode (t->adapter);
     if (t->cpuid == 0) {
         /* Device not responding. */
+#if 1 //DO_DEBUG_PRINTS
         fprintf (stderr, _("Unknown CPUID=%08x.\n"), t->cpuid);
+#endif
         t->adapter->close (t->adapter, 0);
         exit (1);
     }
@@ -284,7 +299,9 @@ target_t *target_open (const char *port_name)
     for (i=0; (t->cpuid ^ pic32mx_dev[i].devid) & 0x0fffffff; i++) {
         if (pic32mx_dev[i].devid == 0) {
             /* Device not detected. */
+#if 1 //DO_DEBUG_PRINTS
             fprintf (stderr, _("Unknown CPUID=%08x.\n"), t->cpuid);
+#endif
             t->adapter->close (t->adapter, 0);
             exit (1);
         }
@@ -400,12 +417,16 @@ void target_read_block (target_t *t, unsigned addr,
     unsigned nwords, unsigned *data)
 {
     if (! t->adapter->read_data) {
+#if DO_DEBUG_PRINTS
         printf (_("\nData reading not supported by the adapter.\n"));
         exit (1);
+#endif
     }
 
     addr = virt_to_phys (addr);
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "target_read_block (addr = %x, nwords = %d)\n", addr, nwords);
+#endif
     while (nwords > 0) {
         unsigned n = nwords;
         if (n > 256)
@@ -415,7 +436,9 @@ void target_read_block (target_t *t, unsigned addr,
         data += n;
         nwords -= n;
     }
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "    done (addr = %x)\n", addr);
+#endif
 }
 
 /*
@@ -426,7 +449,9 @@ void target_verify_block (target_t *t, unsigned addr,
 {
     unsigned i, word, expected, block[512];
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: addr=%08x, nwords=%u, data=%08x...\n", __func__, addr, nwords, data[0]);
+#endif
     if (t->adapter->verify_data != 0) {
         t->adapter->verify_data (t->adapter, virt_to_phys (addr), nwords, data);
         return;
@@ -437,9 +462,11 @@ void target_verify_block (target_t *t, unsigned addr,
         expected = data [i];
         word = block [i];
         if (word != expected) {
+#if DO_DEBUG_PRINTS
             printf (_("\nerror at address %08X: file=%08X, mem=%08X\n"),
                 addr + i*4, expected, word);
             exit (1);
+#endif
         }
     }
 }
@@ -447,17 +474,63 @@ void target_verify_block (target_t *t, unsigned addr,
 /*
  * Erase all Flash memory.
  */
-int target_erase (target_t *t)
+int target_erase (target_t *t, int cmd_location)
 {
     if (t->adapter->erase_chip) {
+#if 0
         printf (_("        Erase: "));
+#endif
         fflush (stdout);
-        t->adapter->erase_chip (t->adapter);
+        t->adapter->erase_chip (t->adapter, cmd_location);
+#if 0
         printf (_("done\n"));
+#endif
+    }
+    return 1;
+}
+#if 1
+/*
+ * Copy from SQI memory to NVM program memory.
+ */
+int target_copy_from_sqi_to_progmem(target_t *t, int cmd_location)
+{
+    if (t->adapter->copy_from_sqi_to_progmem) {
+        //fprintf (stderr, "        Copy from SQI to NVM Flash Program Memory: ");
+        fflush (stdout);
+        t->adapter->copy_from_sqi_to_progmem (t->adapter, cmd_location);
+        //printf (_("done\n"));
     }
     return 1;
 }
 
+/*
+ * Copy checksum to SQI memory.
+ */
+int target_copy_checksum_to_sqiflash(target_t *t, int cmd_location)
+{
+    if (t->adapter->copy_checksum_to_sqiflash) {
+        //fprintf (stderr, "        Copy from SQI to NVM Flash Program Memory: ");
+        fflush (stdout);
+        t->adapter->copy_checksum_to_sqiflash (t->adapter, cmd_location);
+        //printf (_("done\n"));
+    }
+    return 1;
+}
+
+/*
+ * Erase all Flash memory.
+ */
+int target_erase_progmem (target_t *t)
+{
+    if (t->adapter->erase_progmem) {
+        //fprintf (stderr, "        Erase NVM Flash Program Memory: ");
+        fflush (stdout);
+        t->adapter->erase_progmem (t->adapter);
+        //printf (_("done\n"));
+    }
+    return 1;
+}
+#endif
 /*
  * Test block for non 0xFFFFFFFF value
  */
@@ -473,10 +546,12 @@ static int target_test_empty_block (unsigned *data, unsigned nwords)
  * Write to flash memory.
  */
 void target_program_block (target_t *t, unsigned addr,
-    unsigned nwords, unsigned *data)
+    unsigned nwords, unsigned *data, int cmd_location)
 {
     addr = virt_to_phys (addr);
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "target_program_block (addr = %x, nwords = %d)\n", addr, nwords);
+#endif
 
     if (! t->adapter->program_block) {
         unsigned words_per_row = t->family->bytes_per_row / 4;
@@ -484,8 +559,15 @@ void target_program_block (target_t *t, unsigned addr,
             unsigned n = nwords;
             if (n > words_per_row)
                 n = words_per_row;
+
 	    if (! target_test_empty_block (data, words_per_row))
+            {
+#if DO_DEBUG_PRINTS
+                //fprintf (stderr, "target_program_block program_row (addr = %x)\n", addr);
+#endif
+                
                 t->adapter->program_row (t->adapter, addr, data, words_per_row);
+            }
             addr += n<<2;
             data += n;
             nwords -= n;
@@ -495,7 +577,10 @@ void target_program_block (target_t *t, unsigned addr,
         unsigned n = nwords;
         if (n > 256)
             n = 256;
-        t->adapter->program_block (t->adapter, addr, data);
+#if DO_DEBUG_PRINTS
+        //fprintf (stderr, "target_program_block program_block (addr = %x)\n", addr);
+#endif
+        t->adapter->program_block (t->adapter, addr, data, cmd_location);
         addr += n<<2;
         data += n;
         nwords -= n;
@@ -513,7 +598,9 @@ void target_program_devcfg (target_t *t, unsigned devcfg0,
 
     unsigned addr = 0x1fc00000 + t->family->devcfg_offset;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: devcfg0-3 = %08x %08x %08x %08x\n", __func__, devcfg0, devcfg1, devcfg2, devcfg3);
+#endif
     if (t->family->pe_version >= 0x0500) {
         /* Since pic32mz, the programming executive */
         t->adapter->program_quad_word (t->adapter, addr, devcfg3,

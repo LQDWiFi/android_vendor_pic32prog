@@ -13,7 +13,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
-#include <usb.h>
 
 #include "adapter.h"
 #include "hidapi.h"
@@ -87,13 +86,21 @@ static void uhb_command (uhb_adapter_t *a, unsigned char cmd,
     }
 
     if (debug_level > 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Send");
+#endif
         for (k=0; k<nbytes; ++k) {
             if (k != 0 && (k & 15) == 0)
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", buf[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     hid_write (a->hiddev, buf, 64);
 
@@ -106,13 +113,21 @@ static void uhb_command (uhb_adapter_t *a, unsigned char cmd,
         /* Send data. */
         for (; data_bytes>0; data_bytes-=64) {
             if (debug_level > 0) {
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "---    ");
+#endif
                 for (k=0; k<64; ++k) {
                     if (k != 0 && (k & 15) == 0)
+#if DO_DEBUG_PRINTS
                         fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
                     fprintf (stderr, " %02x", data[k]);
+#endif
                 }
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n");
+#endif
             }
             hid_write (a->hiddev, data, 64);
             data += 64;
@@ -123,21 +138,33 @@ static void uhb_command (uhb_adapter_t *a, unsigned char cmd,
     memset (a->reply, 0, sizeof(a->reply));
     reply_len = hid_read_timeout (a->hiddev, a->reply, 64, 500);
     if (reply_len == 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Timed out.\n");
+#endif
         exit (-1);
     }
     if (reply_len != 64) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uhb: error %d receiving packet\n", reply_len);
+#endif
         exit (-1);
     }
     if (debug_level > 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Recv");
+#endif
         for (k=0; k<2; ++k) {
             if (k != 0 && (k & 15) == 0)
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", a->reply[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
 }
 
@@ -175,7 +202,9 @@ static void uhb_program_word (adapter_t *adapter,
 {
     /* Not supported by UHB bootloader. */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uhb: program word at %08x: %08x\n", addr, word);
+#endif
 }
 
 /*
@@ -196,14 +225,18 @@ static void uhb_program_block (adapter_t *adapter,
     uhb_adapter_t *a = (uhb_adapter_t*) adapter;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uhb: program 1024 bytes at %08x: %08x-%08x-...-%08x\n",
+#endif
             addr, data[0], data[1], data[255]);
 
     if (! (addr >= a->adapter.user_start &&
            addr + 1024 <= a->adapter.user_start + a->adapter.user_nbytes) &&
         ! (addr >= 0x1fc00000 &&
            addr + 1024 <= 0x1fc00000 + 8*1024)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "address %08x out of program area\n", addr);
+#endif
         return;
     }
 
@@ -216,7 +249,9 @@ static void uhb_program_block (adapter_t *adapter,
         unsigned ba = 0x1fc00000;
         for (; nblocks-- > 0; addr += a->erase_size) {
             if (debug_level > 0)
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "*** uhb: erase boot block %08x\n", ba);
+#endif
 
             /* Erase one block. */
             uhb_command (a, CMD_ERASE, ba, 1, 0, 0);
@@ -240,7 +275,9 @@ static void uhb_erase_chip (adapter_t *adapter)
     nblocks = a->adapter.user_nbytes / a->erase_size;
     for (addr = a->adapter.user_start; nblocks-- > 0; addr += a->erase_size) {
         if (debug_level > 0)
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "*** uhb: erase flash block %08x\n", addr);
+#endif
 
         /* Erase one block. */
         uhb_command (a, CMD_ERASE, addr, 1, 0, 0);
@@ -259,12 +296,16 @@ adapter_t *adapter_open_uhb (void)
 
     hiddev = hid_open (MIKROE_VID, MIKROEBOOT_PID, 0);
     if (! hiddev) {
+#if DO_DEBUG_PRINTS
         /*fprintf (stderr, "HID bootloader not found\n");*/
+#endif
         return 0;
     }
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Out of memory\n");
+#endif
         return 0;
     }
     a->hiddev = hiddev;
@@ -308,7 +349,9 @@ adapter_t *adapter_open_uhb (void)
     /* Enter Bootloader mode. */
     uhb_command (a, CMD_BOOT, 0, 0, 0, 0);
     if (a->reply[0] != STX || a->reply[1] != CMD_BOOT) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "uhb: Cannot enter bootloader mode.\n");
+#endif
         return 0;
     }
 

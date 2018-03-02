@@ -475,7 +475,7 @@ int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t 
 int HID_API_EXPORT hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds)
 {
 	int bytes_read;
-
+#if 0
 	if (milliseconds != 0) {
 		/* milliseconds is -1 or > 0. In both cases, we want to
 		   call poll() and wait for data to arrive. -1 means
@@ -488,17 +488,29 @@ int HID_API_EXPORT hid_read_timeout(hid_device *dev, unsigned char *data, size_t
 		fds.revents = 0;
 		ret = poll(&fds, 1, milliseconds);
 		if (ret == -1 || ret == 0)
+		{
+#if DO_DEBUG_PRINTS
+			fprintf(stderr, "hid_read_timeout exited due to no activity on polled file descriptors");
+#endif
 			/* Error or timeout */
 			return ret;
+		}
 	}
-
+#endif
 	bytes_read = read(dev->device_handle, data, length);
+	printf("bytes_read: %d, errno: %d\n", bytes_read, errno);
+#if DO_DEBUG_PRINTS
+	fprintf(stderr, "bytes_read: %d, errno: %d\n", bytes_read, errno);
+#endif
 	if (bytes_read < 0 && errno == EAGAIN)
 		bytes_read = 0;
 
 	if (bytes_read >= 0 &&
 	    kernel_version < KERNEL_VERSION(2,6,34) &&
 	    dev->uses_numbered_reports) {
+#if DO_DEBUG_PRINTS
+		fprintf(stderr, "inside kernel code for older kernels\n");
+#endif
 		/* Work around a kernel bug. Chop off the first byte. */
 		memmove(data, data+1, bytes_read);
 		bytes_read--;

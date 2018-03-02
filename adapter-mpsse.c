@@ -131,20 +131,30 @@ static void bulk_write (mpsse_adapter_t *a, unsigned char *output, int nbytes)
 
     if (debug_level > 1) {
         int i;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "usb bulk write %d bytes:", nbytes);
+#endif
         for (i=0; i<nbytes; i++)
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%c%02x", i ? '-' : ' ', output[i]);
+#endif
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     bytes_written = usb_bulk_write (a->usbdev, IN_EP, (char*) output,
         nbytes, 1000);
     if (bytes_written < 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "usb bulk write failed: %d: %s\n",
+#endif
             bytes_written, usb_strerror());
         exit (-1);
     }
     if (bytes_written != nbytes)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "usb bulk written %d bytes of %d",
+#endif
             bytes_written, nbytes);
 }
 
@@ -171,19 +181,29 @@ static void mpsse_flush_output (mpsse_adapter_t *a)
         n = usb_bulk_read (a->usbdev, OUT_EP, (char*) reply,
             a->bytes_to_read - bytes_read + 2, 2000);
         if (n < 0) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "usb bulk read failed\n");
+#endif
             exit (-1);
         }
         if (debug_level > 1) {
             if (n != a->bytes_to_read + 2)
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "usb bulk read %d bytes of %d\n",
+#endif
                     n, a->bytes_to_read - bytes_read + 2);
             else {
                 int i;
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "usb bulk read %d bytes:", n);
+#endif
                 for (i=0; i<n; i++)
+#if DO_DEBUG_PRINTS
                     fprintf (stderr, "%c%02x", i ? '-' : ' ', reply[i]);
+#endif
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n");
+#endif
             }
         }
         if (n > 2) {
@@ -194,10 +214,16 @@ static void mpsse_flush_output (mpsse_adapter_t *a)
     }
     if (debug_level > 1) {
         int i;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "mpsse_flush_output received %d bytes:", a->bytes_to_read);
+#endif
         for (i=0; i<a->bytes_to_read; i++)
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%c%02x", i ? '-' : ' ', a->input[i]);
+#endif
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     a->bytes_to_read = 0;
 }
@@ -315,20 +341,26 @@ static void mpsse_send (mpsse_adapter_t *a,
 static unsigned long long mpsse_fix_data (mpsse_adapter_t *a, unsigned long long word)
 {
     unsigned long long fix_high_bit = word & a->fix_high_bit;
+#if DO_DEBUG_PRINTS
     //if (debug) fprintf (stderr, "fix (%08llx) high_bit=%08llx\n", word, a->fix_high_bit);
+#endif
 
     if (a->high_byte_bits) {
         /* Fix a high byte of received data. */
         unsigned long long high_byte = a->high_byte_mask &
             ((word & a->high_byte_mask) >> (8 - a->high_byte_bits));
         word = (word & ~a->high_byte_mask) | high_byte;
+#if DO_DEBUG_PRINTS
         //if (debug) fprintf (stderr, "Corrected byte %08llx -> %08llx\n", a->high_byte_mask, high_byte);
+#endif
     }
     word &= a->high_bit_mask - 1;
     if (fix_high_bit) {
         /* Fix a high bit of received data. */
         word |= a->high_bit_mask;
+#if DO_DEBUG_PRINTS
         //if (debug) fprintf (stderr, "Corrected bit %08llx -> %08llx\n", a->high_bit_mask, word >> 9);
+#endif
     }
     return word;
 }
@@ -379,7 +411,9 @@ static void mpsse_reset (mpsse_adapter_t *a, int trst, int sysrst, int led)
     bulk_write (a, buf, 3);
 
     if (debug_level)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "mpsse_reset (trst=%d, sysrst=%d) output=%04x, direction: %04x\n",
+#endif
             trst, sysrst, output, direction);
 }
 
@@ -391,7 +425,9 @@ static void mpsse_speed (mpsse_adapter_t *a, int khz)
     if (divisor < 0)
         divisor = 0;
     if (debug_level)
+#if DO_DEBUG_PRINTS
     	fprintf (stderr, "%s: divisor: %u\n", a->name, divisor);
+#endif
 
     if (a->mhz > 6) {
         /* Use 60MHz master clock (disable divide by 5). */
@@ -413,7 +449,9 @@ static void mpsse_speed (mpsse_adapter_t *a, int khz)
 
     if (debug_level) {
         khz = (a->mhz * 2000 / (divisor + 1) + 1) / 2;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: clock rate %.1f MHz\n", a->name, khz / 1000.0);
+#endif
     }
 }
 
@@ -462,7 +500,9 @@ static void serial_execution (mpsse_adapter_t *a)
 
     /* Enter serial execution. */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: enter serial execution\n", a->name);
+#endif
 
     mpsse_send (a, 1, 1, 5, TAP_SW_ETAP, 0);    /* Send command. */
     mpsse_send (a, 1, 1, 5, ETAP_EJTAGBOOT, 0); /* Send command. */
@@ -475,10 +515,14 @@ static void serial_execution (mpsse_adapter_t *a)
     mpsse_send (a, 0, 0, 8, MCHP_STATUS, 1);    /* Xfer data. */
     unsigned status = mpsse_recv (a);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
     if ((status & ~MCHP_STATUS_DEVRST) !=
         (MCHP_STATUS_CPS | MCHP_STATUS_CFGRDY | MCHP_STATUS_FAEN)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x (reset)\n", a->name, status);
+#endif
         exit (-1);
     }
 
@@ -492,10 +536,14 @@ static void serial_execution (mpsse_adapter_t *a)
     mpsse_send (a, 0, 0, 8, MCHP_STATUS, 1);    /* Xfer data. */
     status = mpsse_recv (a);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
     if (status != (MCHP_STATUS_CPS | MCHP_STATUS_CFGRDY |
                    MCHP_STATUS_FAEN)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x (no reset)\n", a->name, status);
+#endif
         exit (-1);
     }
 
@@ -514,7 +562,9 @@ static void xfer_instruction (mpsse_adapter_t *a, unsigned instruction)
     unsigned ctl;
 
     if (debug_level > 1)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: xfer instruction %08x\n", a->name, instruction);
+#endif
 
     // Select Control Register
     mpsse_send (a, 1, 1, 5, ETAP_CONTROL, 0);       /* Send command. */
@@ -568,7 +618,9 @@ static unsigned get_pe_response (mpsse_adapter_t *a)
     mpsse_send (a, 0, 0, 32, CONTROL_PROBEN |       /* Send data. */
                              CONTROL_PROBTRAP, 0);
     if (debug_level > 1)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: get PE response %08x\n", a->name, response);
+#endif
     return response;
 }
 
@@ -583,7 +635,9 @@ static unsigned mpsse_read_word (adapter_t *adapter, unsigned addr)
 
     serial_execution (a);
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: read word from %08x\n", a->name, addr);
+#endif
     xfer_instruction (a, 0x3c04bf80);           // lui s3, 0xFF20
     xfer_instruction (a, 0x3c080000 | addr_hi); // lui t0, addr_hi
     xfer_instruction (a, 0x35080000 | addr_lo); // ori t0, addr_lo
@@ -595,7 +649,9 @@ static unsigned mpsse_read_word (adapter_t *adapter, unsigned addr)
     unsigned word = mpsse_recv (a) >> 1;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: read word at %08x -> %08x\n", a->name, addr, word);
+#endif
     return word;
 }
 
@@ -608,7 +664,9 @@ static void mpsse_read_data (adapter_t *adapter,
     mpsse_adapter_t *a = (mpsse_adapter_t*) adapter;
     unsigned words_read, i;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: read %d bytes from %08x\n", a->name, nwords*4, addr);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
         for (; nwords > 0; nwords--) {
@@ -627,7 +685,9 @@ static void mpsse_read_data (adapter_t *adapter,
 
         unsigned response = get_pe_response (a);    /* Get response */
         if (response != PE_READ << 16) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: bad READ response = %08x, expected %08x\n",
+#endif
                 a->name, response, PE_READ << 16);
             exit (-1);
         }
@@ -650,7 +710,9 @@ static void mpsse_load_executive (adapter_t *adapter,
     serial_execution (a);
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: download PE loader\n", a->name);
+#endif
 
     /* Step 1. */
     xfer_instruction (a, 0x3c04bf88);   // lui a0, 0xbf88
@@ -704,7 +766,9 @@ static void mpsse_load_executive (adapter_t *adapter,
 
     /* Download the PE itself (step 7-B). */
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: download PE\n", a->name);
+#endif
     for (i=0; i<nwords; i++) {
         xfer_fastdata (a, *pe++);
     }
@@ -720,12 +784,16 @@ static void mpsse_load_executive (adapter_t *adapter,
 
     unsigned version = get_pe_response (a);
     if (version != (PE_EXEC_VERSION << 16 | pe_version)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: bad PE version = %08x, expected %08x\n",
+#endif
             a->name, version, PE_EXEC_VERSION << 16 | pe_version);
         exit (-1);
     }
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: PE version = %04x\n",
+#endif
             a->name, version & 0xffff);
 }
 
@@ -755,10 +823,14 @@ static void mpsse_program_word (adapter_t *adapter,
     mpsse_adapter_t *a = (mpsse_adapter_t*) adapter;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: program word at %08x: %08x\n", a->name, addr, word);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -772,7 +844,9 @@ static void mpsse_program_word (adapter_t *adapter,
 
     unsigned response = get_pe_response (a);
     if (response != (PE_WORD_PROGRAM << 16)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program word %08x at %08x, reply = %08x\n",
+#endif
             a->name, word, addr, response);
         exit (-1);
     }
@@ -788,11 +862,15 @@ static void mpsse_program_row (adapter_t *adapter, unsigned addr,
     int i;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: row program %u words at %08x\n",
+#endif
             a->name, words_per_row, addr);
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -812,7 +890,9 @@ static void mpsse_program_row (adapter_t *adapter, unsigned addr,
 
     unsigned response = get_pe_response (a);
     if (response != (PE_ROW_PROGRAM << 16)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program row at %08x, reply = %08x\n",
+#endif
             a->name, addr, response);
         exit (-1);
     }
@@ -827,10 +907,14 @@ static void mpsse_verify_data (adapter_t *adapter,
     mpsse_adapter_t *a = (mpsse_adapter_t*) adapter;
     unsigned data_crc, flash_crc;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: verify %d words at %08x\n", a->name, nwords, addr);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow verify not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -844,7 +928,9 @@ static void mpsse_verify_data (adapter_t *adapter,
 
     unsigned response = get_pe_response (a);
     if (response != (PE_GET_CRC << 16)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to verify %d words at %08x, reply = %08x\n",
+#endif
             a->name, nwords, addr, response);
         exit (-1);
     }
@@ -852,7 +938,9 @@ static void mpsse_verify_data (adapter_t *adapter,
 
     data_crc = calculate_crc (0xffff, (unsigned char*) data, nwords * 4);
     if (flash_crc != data_crc) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: checksum failed at %08x: sum=%04x, expected=%04x\n",
+#endif
             a->name, addr, flash_crc, data_crc);
         //exit (-1);
     }
@@ -872,7 +960,9 @@ adapter_t *adapter_open_mpsse (void)
 
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "adapter_open_mpsse: out of memory\n");
+#endif
         return 0;
     }
     usb_init();
@@ -938,17 +1028,23 @@ adapter_t *adapter_open_mpsse (void)
             }
         }
     }
+#if DO_DEBUG_PRINTS
     /*fprintf (stderr, "USB adapter not found: vid=%04x, pid=%04x\n",
+#endif
         OLIMEX_VID, OLIMEX_PID);*/
     free (a);
     return 0;
 found:
+#if DO_DEBUG_PRINTS
     /*fprintf (stderr, "found USB adapter: vid %04x, pid %04x, type %03x\n",
+#endif
         dev->descriptor.idVendor, dev->descriptor.idProduct,
         dev->descriptor.bcdDevice);*/
     a->usbdev = usb_open (dev);
     if (! a->usbdev) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: usb_open() failed\n", a->name);
+#endif
         free (a);
         return 0;
     }
@@ -991,9 +1087,13 @@ found:
         USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
         SIO_RESET, 0, 1, 0, 0, 1000) != 0) {
         if (errno == EPERM)
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: superuser privileges needed.\n", a->name);
+#endif
         else
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: FTDI reset failed\n", a->name);
+#endif
 failed: usb_release_interface (a->usbdev, 0);
         usb_close (a->usbdev);
         free (a);
@@ -1004,7 +1104,9 @@ failed: usb_release_interface (a->usbdev, 0);
     if (usb_control_msg (a->usbdev,
         USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
         SIO_SET_BITMODE, 0x20b, 1, 0, 0, 1000) != 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: can't set sync mpsse mode\n", a->name);
+#endif
         goto failed;
     }
 
@@ -1013,17 +1115,23 @@ failed: usb_release_interface (a->usbdev, 0);
     if (usb_control_msg (a->usbdev,
         USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
         SIO_SET_LATENCY_TIMER, latency_timer, 1, 0, 0, 1000) != 0) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: unable to set latency timer\n", a->name);
+#endif
         goto failed;
     }
     if (usb_control_msg (a->usbdev,
         USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_IN,
         SIO_GET_LATENCY_TIMER, 0, 1, (char*) &latency_timer, 1, 1000) != 1) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: unable to get latency timer\n", a->name);
+#endif
         goto failed;
     }
     if (debug_level)
+#if DO_DEBUG_PRINTS
     	fprintf (stderr, "%s: latency timer: %u usec\n", a->name, latency_timer);
+#endif
 
     /* By default, use 500 kHz speed. */
     int khz = 500;
@@ -1045,7 +1153,9 @@ failed: usb_release_interface (a->usbdev, 0);
     if ((idcode & 0xfff) != 0x053) {
         /* Microchip vendor ID is expected. */
         if (debug_level > 0 || (idcode != 0 && idcode != 0xffffffff))
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: incompatible CPU detected, IDCODE=%08x\n",
+#endif
                 a->name, idcode);
         mpsse_reset (a, 0, 0, 0);
         goto failed;
@@ -1062,10 +1172,14 @@ failed: usb_release_interface (a->usbdev, 0);
     mpsse_send (a, 0, 0, 8, MCHP_STATUS, 1);    /* Xfer data. */
     unsigned status = mpsse_recv (a);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
     if ((status & ~MCHP_STATUS_DEVRST) !=
         (MCHP_STATUS_CPS | MCHP_STATUS_CFGRDY | MCHP_STATUS_FAEN)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x\n", a->name, status);
+#endif
         mpsse_reset (a, 0, 0, 0);
         goto failed;
     }

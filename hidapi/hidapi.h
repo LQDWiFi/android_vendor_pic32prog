@@ -37,6 +37,10 @@
       #define HID_API_CALL /**< API call macro */
 #endif
 
+#define DO_DEBUG_PRINTS 1 //Eventhough DO_DEBUG_PRINTS is debug logs, it always need 
+                          //to be enabled for proper operation due to timing issues
+#define DO_DEBUG_PRINTS_IMP 0
+
 #define HID_API_EXPORT_CALL HID_API_EXPORT HID_API_CALL /**< API export and call macro*/
 
 #ifdef __cplusplus

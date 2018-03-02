@@ -16,7 +16,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
-#include <usb.h>
 
 #include "adapter.h"
 #include "hidapi.h"
@@ -67,13 +66,23 @@ static void pickit_send_buf (pickit_adapter_t *a, unsigned char *buf, unsigned n
 {
     if (debug_level > 1) {
         int k;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "---Send");
+#endif
         for (k=0; k<nbytes; ++k) {
             if (k != 0 && (k & 15) == 0)
+            {
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+            }
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", buf[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
     hid_write (a->hiddev, buf, 64);
 }
@@ -95,18 +104,30 @@ static void pickit_send (pickit_adapter_t *a, unsigned argc, ...)
 static void pickit_recv (pickit_adapter_t *a)
 {
     if (hid_read (a->hiddev, a->reply, 64) != 64) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: error receiving packet\n", a->name);
+#endif
         exit (-1);
     }
     if (debug_level > 1) {
         int k;
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "--->>>>");
+#endif
         for (k=0; k<64; ++k) {
             if (k != 0 && (k & 15) == 0)
+            {
+#if DO_DEBUG_PRINTS
                 fprintf (stderr, "\n       ");
+#endif
+            }
+#if DO_DEBUG_PRINTS
             fprintf (stderr, " %02x", a->reply[k]);
+#endif
         }
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "\n");
+#endif
     }
 }
 
@@ -118,7 +139,9 @@ static void check_timeout (pickit_adapter_t *a, const char *message)
     pickit_recv (a);
     status = a->reply[0] | a->reply[1] << 8;
     if (status & STATUS_ICD_TIMEOUT) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: timed out at %s, status = %04x\n",
+#endif
             a->name, message, status);
         exit (-1);
     }
@@ -135,7 +158,9 @@ static void serial_execution (pickit_adapter_t *a)
 
     // Enter serial execution.
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: enter serial execution\n", a->name);
+#endif
     pickit_send (a, 29, CMD_EXECUTE_SCRIPT, 27,
         SCRIPT_JT2_SENDCMD, TAP_SW_MTAP,
         SCRIPT_JT2_SENDCMD, MTAP_COMMAND,
@@ -160,7 +185,9 @@ static void pickit_load_executive (adapter_t *adapter,
 {
     pickit_adapter_t *a = (pickit_adapter_t*) adapter;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: load_executive\n", a->name);
+#endif
     a->use_executive = 1;
     serial_execution (a);
 
@@ -170,7 +197,9 @@ static void pickit_load_executive (adapter_t *adapter,
                           (unsigned char) ((w) >> 24)
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: download PE loader\n", a->name);
+#endif
     pickit_send (a, 45, CMD_CLEAR_DOWNLOAD_BUFFER,
         CMD_DOWNLOAD_DATA, 28,          //----------------- step 1
             WORD_AS_BYTES (0x3c04bf88), // lui a0, 0xbf88
@@ -253,7 +282,9 @@ static void pickit_load_executive (adapter_t *adapter,
 
     // Download the PE itself (step 7-B)
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: download PE code\n", a->name);
+#endif
     int nloops = (nwords + 9) / 10;
     for (i=0; i<nloops; i++, pe+=10) {          // download 10 words at a time
         pickit_send (a, 55, CMD_CLEAR_DOWNLOAD_BUFFER,
@@ -307,17 +338,23 @@ static void pickit_load_executive (adapter_t *adapter,
 
     unsigned version = a->reply[3] | (a->reply[4] << 8);
     if (version != 0x0007) {                    // command echo
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: bad PE reply = %04x\n", a->name, version);
+#endif
         exit (-1);
     }
     version = a->reply[1] | (a->reply[2] << 8);
     if (version != pe_version) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: bad PE version = %04x, expected %04x\n",
+#endif
             a->name, version, pe_version);
         exit (-1);
     }
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: PE version = %04x\n", a->name, version);
+#endif
 }
 
 #if 0
@@ -413,7 +450,9 @@ static void pickit_finish (pickit_adapter_t *a, int power_on)
 static void pickit_close (adapter_t *adapter, int power_on)
 {
     pickit_adapter_t *a = (pickit_adapter_t*) adapter;
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: close\n", a->name);
+#endif
 
     pickit_finish (a, power_on);
     free (a);
@@ -434,7 +473,9 @@ static unsigned pickit_get_idcode (adapter_t *adapter)
         SCRIPT_JT2_XFERDATA32_LIT, 0, 0, 0, 0);
     pickit_send (a, 1, CMD_UPLOAD_DATA);
     pickit_recv (a);
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: read id, %d bytes: %02x %02x %02x %02x\n", a->name,
+#endif
     //  a->reply[0], a->reply[1], a->reply[2], a->reply[3], a->reply[4]);
     if (a->reply[0] != 4)
         return 0;
@@ -475,7 +516,9 @@ static unsigned pickit_read_word (adapter_t *adapter, unsigned addr)
         CMD_UPLOAD_DATA);
     pickit_recv (a);
     if (a->reply[0] != 4) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: read word %08x: bad reply length=%u\n",
+#endif
             a->name, addr, a->reply[0]);
         exit (-1);
     }
@@ -507,7 +550,9 @@ static unsigned pickit_read_word (adapter_t *adapter, unsigned addr)
         CMD_UPLOAD_DATA);
     pickit_recv (a);
     if (a->reply[0] != 4) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: read word %08x: bad reply length=%u\n",
+#endif
             a->name, addr, a->reply[0]);
         exit (-1);
     }
@@ -518,7 +563,9 @@ static unsigned pickit_read_word (adapter_t *adapter, unsigned addr)
      * Second word contains the MSB bit of the value. */
     unsigned value = (word1 >> 1) | (word2 & 0x80000000);
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: %08x -> %08x\n", __func__, addr, value);
+#endif
     return value;
 }
 
@@ -532,7 +579,9 @@ static void pickit_read_data (adapter_t *adapter,
     unsigned char buf [64];
     unsigned words_read;
 
+#if DO_DEBUG_PRINTS
 //fprintf (stderr, "%s: read %d bytes from %08x\n", a->name, nwords*4, addr);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
         for (; nwords > 0; nwords--) {
@@ -573,7 +622,9 @@ static void pickit_read_data (adapter_t *adapter,
                 CMD_UPLOAD_DATA_NOLEN);
             pickit_recv (a);
             memcpy (data, a->reply, 64);
+#if DO_DEBUG_PRINTS
 //fprintf (stderr, "   ...%08x...\n", data[0]);
+#endif
             data += 64/4;
             words_read += 64/4;
 
@@ -621,10 +672,14 @@ static void pickit_program_word (adapter_t *adapter,
     pickit_adapter_t *a = (pickit_adapter_t*) adapter;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: program word at %08x: %08x\n", a->name, addr, word);
+#endif
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
     /* Use PE to write flash memory. */
@@ -646,10 +701,14 @@ static void pickit_program_word (adapter_t *adapter,
             SCRIPT_JT2_GET_PE_RESP,
         CMD_UPLOAD_DATA);
     pickit_recv (a);
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: word program PE response %u bytes: %02x...\n",
+#endif
     //  a->name, a->reply[0], a->reply[1]);
     if (a->reply[0] != 4 || a->reply[1] != 0) { // response code 0 = success
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program word %08x at %08x, reply = %02x-%02x-%02x-%02x-%02x\n",
+#endif
             a->name, word, addr, a->reply[0], a->reply[1], a->reply[2], a->reply[3], a->reply[4]);
         exit (-1);
     }
@@ -664,11 +723,15 @@ static void pickit_program_quad_word (adapter_t *adapter, unsigned addr,
     pickit_adapter_t *a = (pickit_adapter_t*) adapter;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: program quad word at %08x: %08x-%08x-%08x-%08x\n",
+#endif
             a->name, addr, word0, word1, word2, word3);
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
 
@@ -706,10 +769,14 @@ static void pickit_program_quad_word (adapter_t *adapter, unsigned addr,
             SCRIPT_JT2_GET_PE_RESP,
         CMD_UPLOAD_DATA);
     pickit_recv (a);
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: word program PE response %u bytes: %02x...\n",
+#endif
     //  a->name, a->reply[0], a->reply[1]);
     if (a->reply[0] != 4 || a->reply[1] != 0) { // response code 0 = success
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program quad word at %08x, reply = %02x-%02x-%02x-%02x-%02x\n",
+#endif
             a->name, addr, a->reply[0], a->reply[1], a->reply[2], a->reply[3], a->reply[4]);
         exit (-1);
     }
@@ -725,11 +792,15 @@ static void pickit_program_row (adapter_t *adapter, unsigned addr,
     unsigned i;
 
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: row program %u words at %08x\n",
+#endif
             a->name, words_per_row, addr);
     if (! a->use_executive) {
         /* Without PE. */
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: slow flash write not implemented yet.\n", a->name);
+#endif
         exit (-1);
     }
     /* Use PE to write flash memory. */
@@ -789,10 +860,14 @@ static void pickit_program_row (adapter_t *adapter, unsigned addr,
         CMD_UPLOAD_DATA);
 
     pickit_recv (a);
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: program PE response %u bytes: %02x...\n",
+#endif
     //  a->name, a->reply[0], a->reply[1]);
     if (a->reply[0] != 4 || a->reply[1] != 0) { // response code 0 = success
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: failed to program row flash memory at %08x, reply = %02x-%02x-%02x-%02x-%02x\n",
+#endif
             a->name, addr, a->reply[0], a->reply[1], a->reply[2], a->reply[3], a->reply[4]);
         exit (-1);
     }
@@ -805,7 +880,9 @@ static void pickit_erase_chip (adapter_t *adapter)
 {
     pickit_adapter_t *a = (pickit_adapter_t*) adapter;
 
+#if DO_DEBUG_PRINTS
     //fprintf (stderr, "%s: erase chip\n", a->name);
+#endif
     pickit_send (a, 11, CMD_CLEAR_UPLOAD_BUFFER, CMD_EXECUTE_SCRIPT, 8,
         SCRIPT_JT2_SENDCMD, TAP_SW_MTAP,
         SCRIPT_JT2_SENDCMD, MTAP_COMMAND,
@@ -831,7 +908,9 @@ adapter_t *adapter_open_pickit (void)
         if (! hiddev)
             hiddev = hid_open (MICROCHIP_VID, CHIPKIT_PID, 0);
         if (! hiddev) {
+#if DO_DEBUG_PRINTS
             /*fprintf (stderr, "HID bootloader not found: vid=%04x, pid=%04x\n",
+#endif
                 MICROCHIP_VID, BOOTLOADER_PID);*/
             return 0;
         }
@@ -839,7 +918,9 @@ adapter_t *adapter_open_pickit (void)
     }
     a = calloc (1, sizeof (*a));
     if (! a) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Out of memory\n");
+#endif
         return 0;
     }
     a->hiddev = hiddev;
@@ -856,8 +937,12 @@ adapter_t *adapter_open_pickit (void)
             a->reply[32] != '3')
         {
             free (a);
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "Incompatible PICkit3 firmware detected.\n");
+#endif
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "Please, upgrade the firmware using PICkit 3 Scripting Tool.\n");
+#endif
             return 0;
         }
         vers_major = a->reply[33];
@@ -916,7 +1001,9 @@ adapter_t *adapter_open_pickit (void)
     pickit_recv (a);
     unsigned status = a->reply[0] | a->reply[1] << 8;
     if (debug_level > 0)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
 
     switch (status & ~(STATUS_RESET | STATUS_BUTTON_PRESSED)) {
     case STATUS_VPP_GND_ON:
@@ -932,7 +1019,9 @@ adapter_t *adapter_open_pickit (void)
     case STATUS_VDD_GND_ON | STATUS_VPP_GND_ON:
         /* Enable power to the board. */
         if (debug_level > 0)
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: enable power\n", a->name);
+#endif
         pickit_send (a, 4, CMD_EXECUTE_SCRIPT, 2,
             SCRIPT_VDD_GND_OFF,
             SCRIPT_VDD_ON);
@@ -942,9 +1031,13 @@ adapter_t *adapter_open_pickit (void)
         pickit_recv (a);
         status = a->reply[0] | a->reply[1] << 8;
         if (debug_level > 0)
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: status %04x\n", a->name, status);
+#endif
         if (status != (STATUS_VDD_ON | STATUS_VPP_GND_ON)) {
+#if DO_DEBUG_PRINTS
             fprintf (stderr, "%s: invalid status = %04x.\n", a->name, status);
+#endif
             return 0;
         }
         /* Wait for power to stabilize. */
@@ -952,7 +1045,9 @@ adapter_t *adapter_open_pickit (void)
         break;
 
     default:
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: invalid status = %04x\n", a->name, status);
+#endif
         return 0;
     }
 
@@ -985,19 +1080,27 @@ adapter_t *adapter_open_pickit (void)
     pickit_send (a, 1, CMD_UPLOAD_DATA);
     pickit_recv (a);
     if (debug_level > 1)
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: got %02x-%02x\n", a->name, a->reply[0], a->reply[1]);
+#endif
     if (a->reply[0] != 1) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "%s: cannot get MCHP STATUS\n", a->name);
+#endif
         pickit_finish (a, 0);
         return 0;
     }
     if (! (a->reply[1] & MCHP_STATUS_CFGRDY)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "No device attached.\n");
+#endif
         pickit_finish (a, 0);
         return 0;
     }
     if (! (a->reply[1] & MCHP_STATUS_CPS)) {
+#if DO_DEBUG_PRINTS
         fprintf (stderr, "Device is code protected and must be erased first.\n");
+#endif
         pickit_finish (a, 0);
         return 0;
     }
